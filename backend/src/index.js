@@ -61,6 +61,27 @@ const parsePag = (q) => {
 app.get('/', (_req, res) => res.send('API OK'));
 app.get('/health', (_req, res) => res.json({ ok: true, now: new Date().toISOString() }));
 
+// Ruta de prueba para verificar conexión a Supabase
+app.get('/test-connection', asyncH(async (req, res) => {
+  try {
+    const { data, error } = await req.sb.from('clientes').select('count', { count: 'exact', head: true });
+    if (error) {
+      return res.json({ 
+        connected: false, 
+        error: error.message,
+        suggestion: "Ejecutar el SQL schema en Supabase" 
+      });
+    }
+    res.json({ connected: true, tables: 'OK' });
+  } catch (e) {
+    res.json({ 
+      connected: false, 
+      error: e.message,
+      suggestion: "Verificar credenciales de Supabase" 
+    });
+  }
+}));
+
 /* ========= Calculadora ========= */
 // POST /calcular-prestamo  (solo calcular, NO guarda)
 app.post('/calcular-prestamo', asyncH(async (req, res) => {
