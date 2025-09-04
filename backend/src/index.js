@@ -46,6 +46,7 @@ const asyncH = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).c
 const errJson = (res, error, code = 500) => res.status(code).json({ error: (error?.message || error || 'Error') });
 const required = (o, fields) => fields.find((f) => o[f] === undefined || o[f] === null || o[f] === '') || null;
 const num = (v) => (v === '' || v === null || v === undefined ? NaN : Number(v));
+const round2 = (x) => Math.round((x + Number.EPSILON) * 100) / 100;
 const parseOrd = (q) => ({
   field: String(q.order || 'id'),
   dir: (String(q.dir || 'asc').toLowerCase() === 'desc') ? { ascending: false } : { ascending: true },
