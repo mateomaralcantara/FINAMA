@@ -246,7 +246,10 @@ export default function Home() {
   ];
 
   return (
-    <Stack spacing={0} pb={16} minH="100vh">
+    <VStack spacing={0} pb={16} minH="100vh" align="stretch">
+      {/* Notificación de Demo */}
+      <DemoNotification />
+      
       <Box
         bg={tabBg}
         borderRadius="2xl"
