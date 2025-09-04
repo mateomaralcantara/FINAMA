@@ -1,0 +1,54 @@
+financiero-banking-bi/
+│
+├── backend/
+│   ├── src/
+│   │   ├── controllers/      # Lógica de negocio (clientes, prestamos, pagos)
+│   │   ├── services/         # Servicios de dominio y reglas (calculos, BI, alarmas)
+│   │   ├── models/           # Modelos de datos (ORM)
+│   │   ├── routes/           # Rutas API REST/GraphQL
+│   │   ├── middlewares/      # Seguridad, logs, validaciones
+│   │   ├── utils/            # Utilidades (cálculos, fechas, notificaciones)
+│   │   ├── jobs/             # Tareas programadas (notifs, cierre, backup)
+│   │   └── index.js          # Punto de entrada backend
+│   ├── config/               # Configuración de ambiente, conexiones BD, llaves
+│   ├── tests/                # Tests unitarios y de integración
+│   └── package.json
+│
+├── frontend/
+│   ├── public/               # Assets estáticos
+│   ├── src/
+│   │   ├── components/       # Componentes UI (inputs, tablas, dashboards)
+│   │   ├── pages/            # Vistas principales (clientes, prestamos, BI, etc)
+│   │   ├── hooks/            # Custom hooks React
+│   │   ├── services/         # Llamadas a API, auth, BI
+│   │   ├── utils/            # Utilidades frontend (formatos, validaciones)
+│   │   ├── styles/           # Estilos (CSS/SCSS)
+│   │   └── App.jsx
+│   ├── tests/
+│   └── package.json
+│
+├── bi/                       # Carpeta para la integración BI
+│   ├── metabase/             # Configuración dashboards, queries, modelos
+│   ├── superset/             # Alternativa: scripts para Superset
+│   └── docs/                 # Documentación técnica para conectar el BI
+│
+├── database/
+│   ├── migrations/           # Scripts de migración/esquema (PostgreSQL)
+│   ├── seeds/                # Datos iniciales (clientes demo, etc)
+│   ├── schema.sql            # Esquema principal de la BD
+│   └── README.md
+│
+├── docker-compose.yml        # Orquestación de servicios (BD, backend, BI, etc)
+├── .env.example              # Variables de entorno modelo
+└── README.md                 # Instrucciones para levantar el sistema
+
+
+
+https://chatgpt.com/c/6880fd61-6d84-8326-87ae-2c8e6f9a9a5e
+
+
+Frontend:    npm start  
+
+backend:     npx nodemon src/index.js
+
+uvicorn main:app --reload
