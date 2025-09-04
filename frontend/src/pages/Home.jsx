@@ -318,6 +318,6 @@ export default function Home() {
           </TabPanels>
         </Tabs>
       </Box>
-    </Stack>
+    </VStack>
   );
 }
