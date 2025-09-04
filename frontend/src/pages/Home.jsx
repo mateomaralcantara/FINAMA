@@ -31,6 +31,7 @@ import CalculadoraPrestamo from "../components/CalculadoraPrestamo";
 import Dashboard from "../components/Dashboard";
 import SolicitudesManager from "../components/SolicitudesManager";
 import SolicitudForm from "../components/SolicitudForm";
+import DemoNotification from "../components/DemoNotification";
 
 const MotionBox = motion(Box);
 
