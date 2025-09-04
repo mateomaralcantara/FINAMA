@@ -103,15 +103,34 @@ app.post('/calcular-prestamo', asyncH(async (req, res) => {
 
 /* ========= Clientes ========= */
 app.get('/clientes', asyncH(async (req, res) => {
-  const { field, dir } = parseOrd(req.query);
-  const { limit, offset } = parsePag(req.query);
+  try {
+    const { field, dir } = parseOrd(req.query);
+    const { limit, offset } = parsePag(req.query);
 
-  let q = req.sb.from('clientes').select('*', { count: 'exact' }).order(field, dir);
-  if (limit || offset) q = q.range(offset, offset + limit - 1);
+    let q = req.sb.from('clientes').select('*', { count: 'exact' }).order(field, dir);
+    if (limit || offset) q = q.range(offset, offset + limit - 1);
 
-  const { data, error, count } = await q;
-  if (error) return errJson(res, error);
-  res.json({ count, items: data || [] });
+    const { data, error, count } = await q;
+    if (error) {
+      // Si la tabla no existe, devolver datos de demostración
+      if (error.message.includes('table') && error.message.includes('not found')) {
+        return res.json({ 
+          count: 3, 
+          items: [
+            { id: 1, nombre: 'Juan Pérez', email: 'juan@example.com', telefono: '555-0101' },
+            { id: 2, nombre: 'María González', email: 'maria@example.com', telefono: '555-0102' },
+            { id: 3, nombre: 'Carlos López', email: 'carlos@example.com', telefono: '555-0103' }
+          ],
+          demo: true,
+          message: 'Datos de demostración - Ejecutar SQL en Supabase para datos reales'
+        });
+      }
+      return errJson(res, error);
+    }
+    res.json({ count, items: data || [] });
+  } catch (e) {
+    return errJson(res, e);
+  }
 }));
 
 app.post('/clientes', asyncH(async (req, res) => {
