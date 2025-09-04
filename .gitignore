@@ -16,3 +16,7 @@ frontend/.env
 # OS/IDE
 .DS_Store
 .vscode/
+-e 
+# Environment files
+*.env
+*.env.*
