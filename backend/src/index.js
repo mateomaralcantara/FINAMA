@@ -287,22 +287,96 @@ app.post('/pagos', asyncH(async (req, res) => {
 /* ========= Solicitudes de Préstamos ========= */
 // GET /solicitudes - Listar todas las solicitudes
 app.get('/solicitudes', asyncH(async (req, res) => {
-  const { field, dir } = parseOrd(req.query);
-  const { limit, offset } = parsePag(req.query);
-  const estado = req.query.estado || null;
+  try {
+    const { field, dir } = parseOrd(req.query);
+    const { limit, offset } = parsePag(req.query);
+    const estado = req.query.estado || null;
 
-  let q = req.sb.from('solicitudes_prestamos').select(`
-    *,
-    clientes:cliente_id(nombre, email, telefono),
-    prestamos:prestamo_original_id(monto, saldo)
-  `, { count: 'exact' }).order(field, dir);
-  
-  if (estado) q = q.eq('estado', estado);
-  if (limit || offset) q = q.range(offset, offset + limit - 1);
+    let q = req.sb.from('solicitudes_prestamos').select(`
+      *,
+      clientes:cliente_id(nombre, email, telefono),
+      prestamos:prestamo_original_id(monto, saldo)
+    `, { count: 'exact' }).order(field, dir);
+    
+    if (estado) q = q.eq('estado', estado);
+    if (limit || offset) q = q.range(offset, offset + limit - 1);
 
-  const { data, error, count } = await q;
-  if (error) return errJson(res, error);
-  res.json({ count, items: data || [] });
+    const { data, error, count } = await q;
+    if (error) {
+      // Si la tabla no existe, devolver datos de demostración
+      if (error.message.includes('table') && error.message.includes('not found')) {
+        const solicitudesDemo = [
+          {
+            id: 1,
+            tipo_solicitud: 'nuevo_cliente',
+            cliente_id: null,
+            prestamo_original_id: null,
+            monto: 8000,
+            tasa: 18,
+            cuotas: 12,
+            frecuencia: 'mensual',
+            nombre_solicitante: 'Andrea Ruiz',
+            email_solicitante: 'andrea@example.com',
+            telefono_solicitante: '555-0104',
+            ingresos_mensuales: 25000,
+            motivo_solicitud: 'Expansión de negocio familiar',
+            estado: 'pendiente',
+            fecha_solicitud: '2024-03-01T10:00:00Z'
+          },
+          {
+            id: 2,
+            tipo_solicitud: 'prestamo_adicional',
+            cliente_id: 1,
+            prestamo_original_id: null,
+            monto: 15000,
+            tasa: 15,
+            cuotas: 18,
+            frecuencia: 'mensual',
+            nombre_solicitante: null,
+            email_solicitante: null,
+            telefono_solicitante: null,
+            ingresos_mensuales: null,
+            motivo_solicitud: 'Inversión en inventario',
+            estado: 'en_revision',
+            fecha_solicitud: '2024-03-02T14:30:00Z',
+            clientes: { nombre: 'Juan Pérez', email: 'juan@example.com', telefono: '555-0101' }
+          },
+          {
+            id: 3,
+            tipo_solicitud: 'renovacion',
+            cliente_id: 2,
+            prestamo_original_id: 2,
+            monto: 6000,
+            tasa: 12,
+            cuotas: 8,
+            frecuencia: 'quincenal',
+            nombre_solicitante: null,
+            email_solicitante: null,
+            telefono_solicitante: null,
+            ingresos_mensuales: null,
+            motivo_solicitud: 'Renovación con mejores condiciones',
+            estado: 'aprobada',
+            fecha_solicitud: '2024-02-28T16:45:00Z',
+            clientes: { nombre: 'María González', email: 'maria@example.com', telefono: '555-0102' },
+            prestamos: { monto: 5000, saldo: 3000 }
+          }
+        ];
+        
+        const filteredData = estado ? solicitudesDemo.filter(s => s.estado === estado) : solicitudesDemo;
+        
+        return res.json({ 
+          count: filteredData.length, 
+          items: filteredData,
+          demo: true,
+          message: 'Datos de demostración - Ejecutar SQL en Supabase para datos reales'
+        });
+      }
+      return errJson(res, error);
+    }
+    res.json({ count, items: data || [] });
+  } catch (e) {
+    return errJson(res, e);
+  }
 }));
 
 // POST /solicitudes - Crear nueva solicitud
