@@ -127,7 +127,12 @@ const MetricCard = ({
                 py={1}
               >
                 <HStack spacing={1}>
-                  <StatArrow type={trend > 0 ? "increase" : "decrease"} />
+                  <Icon 
+                    as={trend > 0 ? ArrowUpIcon : ArrowDownIcon} 
+                    w={3} 
+                    h={3} 
+                    color={trend > 0 ? "green.600" : "red.600"}
+                  />
                   <Text fontSize="xs" fontWeight="bold">
                     {Math.abs(trend)}%
                   </Text>
