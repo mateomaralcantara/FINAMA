@@ -201,6 +201,216 @@ app.post('/pagos', asyncH(async (req, res) => {
   res.status(201).json({ pago: ins.data });
 }));
 
+/* ========= Solicitudes de Préstamos ========= */
+// GET /solicitudes - Listar todas las solicitudes
+app.get('/solicitudes', asyncH(async (req, res) => {
+  const { field, dir } = parseOrd(req.query);
+  const { limit, offset } = parsePag(req.query);
+  const estado = req.query.estado || null;
+
+  let q = req.sb.from('solicitudes_prestamos').select(`
+    *,
+    clientes:cliente_id(nombre, email, telefono),
+    prestamos:prestamo_original_id(monto, saldo)
+  `, { count: 'exact' }).order(field, dir);
+  
+  if (estado) q = q.eq('estado', estado);
+  if (limit || offset) q = q.range(offset, offset + limit - 1);
+
+  const { data, error, count } = await q;
+  if (error) return errJson(res, error);
+  res.json({ count, items: data || [] });
+}));
+
+// POST /solicitudes - Crear nueva solicitud
+app.post('/solicitudes', asyncH(async (req, res) => {
+  const miss = required(req.body, ['tipo_solicitud', 'monto', 'tasa', 'cuotas', 'frecuencia']);
+  if (miss) return errJson(res, `Falta el campo: ${miss}`, 400);
+
+  const {
+    tipo_solicitud, // 'nuevo_cliente' | 'prestamo_adicional' | 'renovacion'
+    cliente_id = null,
+    prestamo_original_id = null,
+    monto, tasa, cuotas, frecuencia,
+    // Datos de cliente nuevo (si aplica)
+    nombre_solicitante = null,
+    email_solicitante = null,
+    telefono_solicitante = null,
+    ingresos_mensuales = null,
+    referencias = null,
+    motivo_solicitud = null
+  } = req.body;
+
+  // Validaciones según tipo
+  if (tipo_solicitud === 'nuevo_cliente') {
+    const missNew = required(req.body, ['nombre_solicitante', 'email_solicitante']);
+    if (missNew) return errJson(res, `Para nuevo cliente falta: ${missNew}`, 400);
+  } else if (['prestamo_adicional', 'renovacion'].includes(tipo_solicitud)) {
+    if (!cliente_id) return errJson(res, 'cliente_id requerido para este tipo', 400);
+  }
+
+  const insertObj = {
+    tipo_solicitud,
+    cliente_id,
+    prestamo_original_id,
+    monto: num(monto),
+    tasa: num(tasa),
+    cuotas: num(cuotas),
+    frecuencia,
+    estado: 'pendiente',
+    nombre_solicitante,
+    email_solicitante,
+    telefono_solicitante,
+    ingresos_mensuales: ingresos_mensuales ? num(ingresos_mensuales) : null,
+    referencias,
+    motivo_solicitud,
+    fecha_solicitud: new Date().toISOString()
+  };
+
+  const { data, error } = await req.sb
+    .from('solicitudes_prestamos')
+    .insert([insertObj])
+    .select()
+    .single();
+
+  if (error) return errJson(res, error);
+  res.status(201).json(data);
+}));
+
+// PATCH /solicitudes/:id - Aprobar/Rechazar solicitud
+app.patch('/solicitudes/:id', asyncH(async (req, res) => {
+  const solicitudId = num(req.params.id);
+  const { estado, comentarios = null } = req.body;
+
+  if (!['aprobada', 'rechazada', 'en_revision'].includes(estado)) {
+    return errJson(res, 'Estado inválido', 400);
+  }
+
+  // Obtener la solicitud
+  const { data: solicitud, error: fetchError } = await req.sb
+    .from('solicitudes_prestamos')
+    .select('*')
+    .eq('id', solicitudId)
+    .single();
+
+  if (fetchError) return errJson(res, fetchError);
+
+  // Actualizar estado
+  const { data: updated, error: updateError } = await req.sb
+    .from('solicitudes_prestamos')
+    .update({ 
+      estado, 
+      comentarios,
+      fecha_procesamiento: new Date().toISOString()
+    })
+    .eq('id', solicitudId)
+    .select()
+    .single();
+
+  if (updateError) return errJson(res, updateError);
+
+  // Si se aprueba, crear cliente y/o préstamo según corresponda
+  if (estado === 'aprobada') {
+    let clienteId = solicitud.cliente_id;
+
+    // Crear cliente nuevo si es necesario
+    if (solicitud.tipo_solicitud === 'nuevo_cliente') {
+      const { data: nuevoCliente, error: clienteError } = await req.sb
+        .from('clientes')
+        .insert([{
+          nombre: solicitud.nombre_solicitante,
+          email: solicitud.email_solicitante,
+          telefono: solicitud.telefono_solicitante
+        }])
+        .select()
+        .single();
+
+      if (clienteError) return errJson(res, clienteError);
+      clienteId = nuevoCliente.id;
+    }
+
+    // Crear préstamo
+    const { resumen } = buildSchedule({
+      monto: solicitud.monto,
+      tasa: solicitud.tasa,
+      cuotas: solicitud.cuotas,
+      frecuencia: solicitud.frecuencia,
+      metodo: 'flat_mensual'
+    });
+
+    const prestamoObj = {
+      cliente_id: clienteId,
+      monto: solicitud.monto,
+      tasa: solicitud.tasa,
+      cuotas: solicitud.cuotas,
+      frecuencia: solicitud.frecuencia,
+      saldo: solicitud.monto,
+      fecha_inicio: new Date().toISOString().split('T')[0],
+      solicitud_origen_id: solicitudId
+    };
+
+    const { data: prestamo, error: prestamoError } = await req.sb
+      .from('prestamos')
+      .insert([prestamoObj])
+      .select()
+      .single();
+
+    if (prestamoError) return errJson(res, prestamoError);
+
+    res.json({ 
+      solicitud: updated, 
+      cliente_id: clienteId,
+      prestamo: prestamo 
+    });
+  } else {
+    res.json({ solicitud: updated });
+  }
+}));
+
+/* ========= Renovaciones ========= */
+// POST /prestamos/:id/renovar - Renovar préstamo existente
+app.post('/prestamos/:id/renovar', asyncH(async (req, res) => {
+  const prestamoId = num(req.params.id);
+  const { nuevo_monto = null, nueva_tasa = null, nuevas_cuotas = null } = req.body;
+
+  // Obtener préstamo original
+  const { data: prestamoOriginal, error: fetchError } = await req.sb
+    .from('prestamos')
+    .select('*')
+    .eq('id', prestamoId)
+    .single();
+
+  if (fetchError) return errJson(res, fetchError);
+
+  // Usar valores del préstamo original si no se especifican nuevos
+  const montoRenovacion = nuevo_monto ? num(nuevo_monto) : prestamoOriginal.monto;
+  const tasaRenovacion = nueva_tasa ? num(nueva_tasa) : prestamoOriginal.tasa;
+  const cuotasRenovacion = nuevas_cuotas ? num(nuevas_cuotas) : prestamoOriginal.cuotas;
+
+  // Crear solicitud de renovación
+  const solicitudRenovacion = {
+    tipo_solicitud: 'renovacion',
+    cliente_id: prestamoOriginal.cliente_id,
+    prestamo_original_id: prestamoId,
+    monto: montoRenovacion,
+    tasa: tasaRenovacion,
+    cuotas: cuotasRenovacion,
+    frecuencia: prestamoOriginal.frecuencia,
+    estado: 'pendiente',
+    motivo_solicitud: 'Renovación de préstamo existente',
+    fecha_solicitud: new Date().toISOString()
+  };
+
+  const { data, error } = await req.sb
+    .from('solicitudes_prestamos')
+    .insert([solicitudRenovacion])
+    .select()
+    .single();
+
+  if (error) return errJson(res, error);
+  res.status(201).json({ mensaje: 'Solicitud de renovación creada', solicitud: data });
+}));
+
 /* ========= Análisis básico ========= */
 let calculos = {};
 try { calculos = require('./calculos'); }
@@ -215,6 +425,39 @@ app.get('/analisis/:clienteId', asyncH(async (req, res) => {
 
   const out = calculos.analisisFinanciero ? calculos.analisisFinanciero(prestamos || []) : {};
   res.json(out);
+}));
+
+// Dashboard general con métricas
+app.get('/dashboard', asyncH(async (req, res) => {
+  const [clientesRes, prestamosRes, solicitudesRes, pagosRes] = await Promise.all([
+    req.sb.from('clientes').select('*', { count: 'exact', head: true }),
+    req.sb.from('prestamos').select('*'),
+    req.sb.from('solicitudes_prestamos').select('*'),
+    req.sb.from('pagos').select('*')
+  ]);
+
+  const totalClientes = clientesRes.count || 0;
+  const prestamos = prestamosRes.data || [];
+  const solicitudes = solicitudesRes.data || [];
+  const pagos = pagosRes.data || [];
+
+  const saldoTotal = prestamos.reduce((acc, p) => acc + Number(p.saldo || 0), 0);
+  const montoTotal = prestamos.reduce((acc, p) => acc + Number(p.monto || 0), 0);
+  const totalPagado = pagos.reduce((acc, p) => acc + Number(p.monto || 0), 0);
+
+  const solicitudesPendientes = solicitudes.filter(s => s.estado === 'pendiente').length;
+  const solicitudesAprobadas = solicitudes.filter(s => s.estado === 'aprobada').length;
+
+  res.json({
+    totalClientes,
+    totalPrestamos: prestamos.length,
+    saldoTotal: round2(saldoTotal),
+    montoTotal: round2(montoTotal),
+    totalPagado: round2(totalPagado),
+    solicitudesPendientes,
+    solicitudesAprobadas,
+    solicitudesTotal: solicitudes.length
+  });
 }));
 
 /* ========= 404 & errores ========= */
