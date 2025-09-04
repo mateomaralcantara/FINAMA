@@ -43,6 +43,19 @@ const ClockIcon = () => (
   </svg>
 );
 
+// Iconos para tendencias
+const ArrowUpIcon = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+    <polyline points="18,15 12,9 6,15"></polyline>
+  </svg>
+);
+
+const ArrowDownIcon = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+    <polyline points="6,9 12,15 18,9"></polyline>
+  </svg>
+);
+
 const MotionBox = motion(Box);
 
 const MetricCard = ({ 
